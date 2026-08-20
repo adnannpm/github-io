@@ -3,7 +3,9 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"github-io/internal/config"
 	"github-io/internal/constant"
+	"github-io/internal/helper"
 	"net/http"
 	"strconv"
 	"strings"
@@ -14,6 +16,11 @@ type User struct {
 	Login       string `json:"login"`
 	Name        string `json:"name"`
 	PublicRepos int    `json:"public_repos"`
+}
+
+type Repo struct {
+	name		string `json:"name"`
+	url			string `json:"url"`
 }
 
 func Username(name string) {
@@ -34,11 +41,58 @@ func Username(name string) {
 	fmt.Print(formatUserTable(user))
 }
 
+func RepoList(username string) {
+	if username != "" {
+		endpoint := fmt.Sprintf("%s/users/%s/repos", constant.URL_API_GITHUB, username)
+		resp, err := http.Get(endpoint)
+		if err != nil {
+			fmt.Println(err)
+		}
+		defer resp.Body.Close()
+
+		var repos []Repo
+		err = json.NewDecoder(resp.Body).Decode(&repos)
+		if err != nil {
+			fmt.Println("Decode error:", err)
+			return
+		}
+
+		fmt.Print(len(repos))
+		return
+	}
+
+	endpoint := fmt.Sprintf("%s/user/repos", constant.URL_API_GITHUB)
+
+	token, _ := config.GetToken()
+	
+	req, _ := http.NewRequest("GET", endpoint, nil)
+	req.Header.Set("Authorization", "Bearer " + token)
+	req.Header.Set("Accept", "application/vnd.github+json")
+
+	client := &http.Client{}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Println("HTTP error:", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	var repos []Repo
+	err = json.NewDecoder(resp.Body).Decode(&repos)
+	if err != nil {
+		fmt.Println("Decode error:", err)
+		return
+	}
+
+	fmt.Print(len(repos))
+}
+
 func formatUserTable(user User) string {
 	rows := [][2]string{
 		{"FIELD", "VALUE"},
-		{"Username", printableValue(user.Login)},
-		{"Name", printableValue(user.Name)},
+		{"Username", helper.PrintableValue(user.Login)},
+		{"Name", helper.PrintableValue(user.Name)},
 		{"Public Repos", strconv.Itoa(user.PublicRepos)},
 	}
 
@@ -75,11 +129,4 @@ func formatUserTable(user User) string {
 	return table.String()
 }
 
-func printableValue(value string) string {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return "-"
-	}
 
-	return strings.NewReplacer("\r", " ", "\n", " ", "\t", " ").Replace(value)
-}
